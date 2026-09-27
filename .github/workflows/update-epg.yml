@@ -1,0 +1,53 @@
+name: Update EPG
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-epg:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download EPG archive
+      run: |
+        curl -L -o epg.xml.gz \
+          -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" \
+          -H "Accept: */*" \
+          -H "Accept-Language: ru-RU,ru;q=0.9,en;q=0.7" \
+          "https://iptvx.one/epg/epg.xml.gz"
+
+    - name: Unpack XML
+      run: gzip -d -f epg.xml.gz
+
+    - name: Verify file
+      run: |
+        if [ -f epg.xml ] && [ -s epg.xml ]; then
+          echo "Файл готов, размер:"
+          du -sh epg.xml
+        else
+          echo "ОШИБКА: epg.xml пустой или не существует"
+          exit 1
+        fi
+
+    - name: Delete old release
+      run: |
+        gh release delete epg-latest --yes --cleanup-tag 2>/dev/null || true
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create new release with epg.xml
+      run: |
+        gh release create epg-latest \
+          --title "EPG Latest" \
+          --notes "Автоматическое обновление программы передач" \
+          epg.xml
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
